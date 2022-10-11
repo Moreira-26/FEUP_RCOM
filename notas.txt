@@ -1,0 +1,27 @@
+Receiver:
+LLOPEN() -> lê a trama SET e envia o UA
+LLREAD() -> lê trama I e fazer destuffing
+Sender:
+LLOPEN() -> envia o SET e recebe o UA
+LLWRITE() -> stuffing das tramas I e enviar 
+
+Information Frame:
+F -> flag
+A -> 0x03
+C -> 0x00 ou 0x40 (Frame 0 ou Frame 1)
+BCC1 -> A ^ C
+D1 .. DN -> dados
+BCC2 -> D1 ^ DN Stuffing?
+F -> flag
+
+sizeFrameMin = sizeMsg + 6
+calcular BCC1 e calcular BCC2 
+percorrer D1..Dn verificar D1..Dn:
+					0x7E -> 0x7D 0x5E
+					0X7D -> 0x7D 0x5D
+
+Stuffing:
+D1..Dn:
+	0x7E -> 0x7D 0x5E
+	0X7D -> 0x7D 0x5D
+

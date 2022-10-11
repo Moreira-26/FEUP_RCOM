@@ -1,42 +1,12 @@
 // Read from serial port in non-canonical mode
-//
-// Modified by: Eduardo Nuno Almeida [enalmeida@fe.up.pt]
-
-#include <fcntl.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <sys/types.h>
-#include <sys/stat.h>
-#include <termios.h>
-#include <unistd.h>
-#include <signal.h>
-
-// Baudrate settings are defined in <asm/termbits.h>, which is
-// included by <termios.h>
-#define BAUDRATE B38400
-#define _POSIX_SOURCE 1 // POSIX compliant source
-
-#define FALSE 0
-#define TRUE 1
-
-#define FLAG (0x7E)
-#define A (0x03)
-#define SET (0x03)
-#define UA (0x07)
-#define BCC (A^UA)
-#define DISC (0x0B)
-
-#define BUF_SIZE 256
-
-#define TIMEOUT 3 //Tempo até Timeout
-#define MAX_SENDS 3 //Numero maximo de tentativas de envio
+#include "sender.h"
 
 //alarm variables
 int alarmEnabled = FALSE;
 int alarmCount = 0;
 
 int UAreceived = FALSE;
+int trama = 0;
 
 volatile int STOP = FALSE;
 
@@ -61,7 +31,6 @@ void alarmHandler(int signal)
 
 //receiveUA
 void receiveControlWord(int* state, unsigned char *c){
-    
     switch(*state){
         case 0:
             if(*c == FLAG){
@@ -128,6 +97,15 @@ int main(int argc, char *argv[])
         exit(-1);
     }
 
+    LLOPEN(fd);
+
+    
+
+    return 0;
+}
+
+
+void LLOPEN(int fd){
     struct termios oldtio;
     struct termios newtio;
 
@@ -186,7 +164,60 @@ int main(int argc, char *argv[])
     }
 
     close(fd);
-
-    return 0;
 }
 
+void LLWRITE(int fd, unsigned char* msg, int size){
+    unsigned char *frameFinal = (unsigned char *)malloc((size + 6) * sizeof(unsigned char));
+    int sizeFrameFinal = size + 6;
+    
+    frameFinal[0] = FLAG;
+    frameFinal[1] = A;
+
+    if(trama == 0){
+        frameFinal[2] = C0;
+    }else{
+        frameFinal[2] = C1;
+    }
+
+    frameFinal[3] = frameFinal[1] ^ frameFinal[2];
+
+    int k = 4;
+
+    for(int i = 0; i < size; i++){
+        if(msg[i] == FLAG){
+            sizeFrameFinal++;
+            frameFinal = (unsigned char *)realloc(frameFinal,sizeFrameFinal);
+            frameFinal[k] = ESC;
+            frameFinal[k + 1] = flagESC;
+            k += 2;
+        }else if(msg[i] == ESC){
+            sizeFrameFinal++;
+            frameFinal = (unsigned char *)realloc(frameFinal,sizeFrameFinal);
+            frameFinal[k] = ESC ;
+            frameFinal[k + 1] = FlagFlagESC;
+            k += 2;
+        }else{
+            frameFinal[k] = msg[i];
+            k++;
+        }
+    }
+
+    unsigned char BCC2 = msg[0];
+    for (int j = 1; j < size; j++){
+        BCC2 ^= msg[j];
+    }
+
+    frameFinal[k] = BCC2;
+    frameFinal[k + 1] = FLAG;   
+
+    //enviar FrameFinal
+    do {
+        write(fd,frameFinal,sizeFrameFinal);
+        //tentar ler 
+        
+    }while();
+    
+
+
+
+}
