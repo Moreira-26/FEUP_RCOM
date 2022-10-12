@@ -213,9 +213,15 @@ void LLWRITE(int fd, unsigned char* msg, int size){
     //enviar FrameFinal
     do {
         write(fd,frameFinal,sizeFrameFinal);
-        //tentar ler 
         
-    }while();
+        //iniciar Alarm
+        //ler ControlMessage 
+        //se for um RR0 e a tramaAtual = 1 ou se for um RR1 e a tramaAtual = 0
+            //trocar a tramaAtual
+            //parar alarm
+        //senao verificar se recebemos um REJ e para alarm
+            
+    }while();//enquanto o alarm para ou é um reject 
     
 
 

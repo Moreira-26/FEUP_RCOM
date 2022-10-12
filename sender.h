@@ -28,8 +28,8 @@
 #define C0 (0x00)
 #define C1 (0x40)
 #define ESC (0x7D)
-#define flagESC (0x5E)
-#define FlagFlagESC (0x5D)
+#define FLAGESC (0x5E)
+#define FLAGFLAGESC (0x5D)
 
 #define BUF_SIZE 256
 

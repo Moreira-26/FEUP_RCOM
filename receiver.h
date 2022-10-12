@@ -21,10 +21,20 @@
 #define UA (0x07)
 #define BCC (A^UA)
 #define DISC (0x0B)
+#define C0 (0x00)
+#define C1 (0x40)
+#define ESC (0x7D)
+#define FLAGESC (0x5E)
+#define FLAGFLAGESC (0x5D)
+#define RR0 (0x05)
+#define RR1 (0x85)
+#define REJ0 (0x01)
+#define REJ1 (0x81) 
+
 
 void LLOPEN(int fd);
 
-void LLREAD();
+void LLREAD(int fd);
 
 void sendControlWord(int fd, unsigned char C);
 
