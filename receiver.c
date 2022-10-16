@@ -1,4 +1,35 @@
-#include "receiver.h"
+#include <fcntl.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <termios.h>
+#include <unistd.h>
+
+// Baudrate settings are defined in <asm/termbits.h>, which is
+// included by <termios.h>
+#define BAUDRATE B38400
+#define _POSIX_SOURCE 1 // POSIX compliant source
+
+#define FALSE 0
+#define TRUE 1
+
+#define FLAG (0x7E)
+#define A (0x03)
+#define SET (0x03)
+#define UA (0x07)
+#define BCC (A^UA)
+#define DISC (0x0B)
+#define C0 (0x00)
+#define C1 (0x40)
+#define ESC (0x7D)
+#define FLAGESC (0x5E)
+#define FLAGFLAGESC (0x5D)
+#define RR0 (0x05)
+#define RR1 (0x85)
+#define REJ0 (0x01)
+#define REJ1 (0x81) 
 
 volatile int STOP = FALSE;
 int expectedFrame = 0;
@@ -44,7 +75,6 @@ int receiveControlWord(int fd, unsigned char C){
             case 4:
                 if(c == FLAG){
                     state = 5;
-                    printf("CONTROL WORD SENT\n");
                 }
                 else
                     state = 0;
@@ -54,6 +84,22 @@ int receiveControlWord(int fd, unsigned char C){
     return TRUE;
 }
 
+
+int verifyBCC2(unsigned char*messageReceived){
+
+    unsigned char BCC2 = messageReceived[0];
+    for (int j = 1; j < (int)sizeof(messageReceived) - 2; j++){
+        BCC2 ^= messageReceived[j];
+    }
+
+    if(BCC2 == messageReceived[(int)sizeof(messageReceived) - 1]){
+        return TRUE;
+    }else{
+        return FALSE;
+    }
+}
+
+
 void sendControlWord(int fd, unsigned char C){
     unsigned char message[5];
     message[0] = FLAG;
@@ -62,79 +108,6 @@ void sendControlWord(int fd, unsigned char C){
     message[3] = message[1] ^ message[2];
     message[4] = FLAG;
     write(fd,message,5);
-}
-
-
-int main(int argc, char *argv[])
-{
-    const char *serialPortName = argv[1];
-
-    if (argc < 2)
-    {
-        printf("Incorrect program usage\n"
-               "Usage: %s <SerialPort>\n"
-               "Example: %s /dev/ttyS1\n",
-               argv[0],
-               argv[0]);
-        exit(1);
-    }
-
-    int fd = open(serialPortName, O_RDWR | O_NOCTTY);
-    if (fd < 0)
-    {
-        perror(serialPortName);
-        exit(-1);
-    }
-
-    LLOPEN(fd);
-
-    return 0;
-}
-
-void LLOPEN(int fd){
-
-    struct termios oldtio;
-    struct termios newtio;
-
-    if (tcgetattr(fd, &oldtio) == -1)
-    {
-        perror("tcgetattr");
-        exit(-1);
-    }
-
-    memset(&newtio, 0, sizeof(newtio));
-
-    newtio.c_cflag = BAUDRATE | CS8 | CLOCAL | CREAD;
-    newtio.c_iflag = IGNPAR;
-    newtio.c_oflag = 0;
-
-    newtio.c_lflag = 0;
-    newtio.c_cc[VTIME] = 1; // Inter-character timer unused
-    newtio.c_cc[VMIN] = 0;  // Blocking read until 5 chars received
-
-    tcflush(fd, TCIOFLUSH);
-
-    if (tcsetattr(fd, TCSANOW, &newtio) == -1)
-    {
-        perror("tcsetattr");
-        exit(-1);
-    }
-
-    printf("New termios structure set\n");
-
-    if(receiveControlWord(fd,SET)){
-        printf("SET RECEIVED\n");
-        sendControlWord(fd,UA);
-        printf("UA SENT\n");
-    }
-
-    if (tcsetattr(fd, TCSANOW, &oldtio) == -1)
-    {
-        perror("tcsetattr");
-        exit(-1);
-    }
-
-    close(fd); 
 }
 
 void LLREAD(int fd){
@@ -226,7 +199,7 @@ void LLREAD(int fd){
                 break;
             case 6:
                 if(verifyBCC2(messageReceived)){
-                    if(frame == 0){
+                    if(receivedFrame == 0){
                         sendControlWord(fd,RR1);
                         state = 7;
                     }else{
@@ -234,15 +207,17 @@ void LLREAD(int fd){
                         state = 7;     
                     }
                     acceptedFrame = TRUE;
+                    printf("RR SENT\n");
                 }else{
-                    if(frame == 0){
-                        sendControlWord(fd,REJ1);
+                    if(receivedFrame == 0){
+                        sendControlWord(fd,REJ0);
                         state = 7;
                     }else{
-                        sendControlWord(fd,REJ0);
+                        sendControlWord(fd,REJ1);
                         state = 7;     
                     }
                     acceptedFrame = FALSE;
+                    printf("REJ SENT\n");
                 }
                 break;
         }
@@ -250,9 +225,14 @@ void LLREAD(int fd){
 
     //retirar BCC2 da mensagem
     messageReceived = (unsigned char*)realloc(messageReceived,sizeof(messageReceived) - 1);
+    sizeMessageReceived--;
     
     if(acceptedFrame){
-        if(frameReceived == expectedFrame){
+        if(receivedFrame == expectedFrame){
+            printf("size mensagem recebida = %i\n", sizeMessageReceived) ;
+            for(int i = 0; i< sizeMessageReceived;i++){
+                printf("Byte nº %i = %X\n",i,messageReceived[i]);
+            }
             expectedFrame ^= 1;
         }else{
             //nao passar mensagem para applicationLayer
@@ -261,21 +241,88 @@ void LLREAD(int fd){
         //nao passar mensagem para applicationLayer
     } 
 
+    free(messageReceived);
+}
+
+void LLOPEN(int fd){
+
+    struct termios oldtio;
+    struct termios newtio;
+
+    if (tcgetattr(fd, &oldtio) == -1)
+    {
+        perror("tcgetattr");
+        exit(-1);
+    }
+
+    memset(&newtio, 0, sizeof(newtio));
+
+    newtio.c_cflag = BAUDRATE | CS8 | CLOCAL | CREAD;
+    newtio.c_iflag = IGNPAR;
+    newtio.c_oflag = 0;
+
+    newtio.c_lflag = 0;
+    newtio.c_cc[VTIME] = 1; // Inter-character timer unused
+    newtio.c_cc[VMIN] = 0;  // Blocking read until 5 chars received
+
+    tcflush(fd, TCIOFLUSH);
+
+    if (tcsetattr(fd, TCSANOW, &newtio) == -1)
+    {
+        perror("tcsetattr");
+        exit(-1);
+    }
+
+    printf("New termios structure set\n");
+
+    if(receiveControlWord(fd,SET)){
+        printf("SET RECEIVED\n");
+        sendControlWord(fd,UA);
+        printf("UA SENT\n");
+    }
+
+    LLREAD(fd);
+
+    while(1);
+    
+    if (tcsetattr(fd, TCSANOW, &oldtio) == -1)
+    {
+        perror("tcsetattr");
+        exit(-1);
+    }
+
+    close(fd); 
+}
+
+
+
+
+
+int main(int argc, char *argv[])
+{
+    const char *serialPortName = argv[1];
+
+    if (argc < 2)
+    {
+        printf("Incorrect program usage\n"
+               "Usage: %s <SerialPort>\n"
+               "Example: %s /dev/ttyS1\n",
+               argv[0],
+               argv[0]);
+        exit(1);
+    }
+
+    int fd = open(serialPortName, O_RDWR | O_NOCTTY);
+    if (fd < 0)
+    {
+        perror(serialPortName);
+        exit(-1);
+    }
+
+    LLOPEN(fd);
+  
+
     return 0;
-
 }
 
-int verifyBCC2(unsigned char*messageReceived){
-
-    unsigned char BCC2 = msg[0];
-    for (int j = 0; j < (int)sizeof(messageReceived) - 2; j++){
-        BCC2 ^= msg[j];
-    }
-
-    if(BCC2 == messageReceived[(int)sizeof(messageReceived) - 1]){
-        return TRUE;
-    }else{
-        return FALSE;
-    }
-}
 

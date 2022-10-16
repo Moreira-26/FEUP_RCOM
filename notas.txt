@@ -24,6 +24,7 @@ Stuffing:
 D1..Dn:
 	0x7E -> 0x7D 0x5E
 	0X7D -> 0x7D 0x5D
+Falta stuffing do BCC2	
 
 Falta acabar LLWRITE do Sender
 
@@ -37,4 +38,6 @@ Fazer LLClose do Receiver
 	Manda Disc
 	Espera Ua	
 
+
+State machine geral para ler interpretar tramas SET/DISC/UA/RR/REJ
 

@@ -40,7 +40,7 @@ void LLOPEN(int fd);
 
 void LLWRITE(int fd, unsigned char* msg, int size); //STUFFING E ENVIA 
 
-void receiveControlWord(int* state, unsigned char *c);//state machineUa
+void receiveControlWord(int fd, unsigned char * cReceived)
 
 void sendControlWord(int fd, unsigned char C); //send control word com C
 
