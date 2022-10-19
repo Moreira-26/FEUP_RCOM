@@ -41,3 +41,12 @@ Fazer LLClose do Receiver
 
 State machine geral para ler interpretar tramas SET/DISC/UA/RR/REJ
 
+Perguntar verificar receber mensagens corretas mas que nao se aplicam ao contexto 
+
+Quando espera pelo Disc e nao recebe o que acontece?
+
+Quando LLCLOSE da erro?
+
+ver toda a parte da application layer
+
+

@@ -17,9 +17,9 @@
 
 #define FLAG (0x7E)
 #define A (0x03)
+#define A_1 (0x01)
 #define SET (0x03)
 #define UA (0x07)
-#define BCC (A^UA)
 #define DISC (0x0B)
 #define C0 (0x00)
 #define C1 (0x40)
@@ -34,9 +34,13 @@
 volatile int STOP = FALSE;
 int expectedFrame = 0;
 
+struct termios oldtio;
+struct termios newtio;
+
 int receiveControlWord(int fd, unsigned char C){
     int state = 0;
     unsigned char c;
+    unsigned char A_check;
     while(state != 5){
         read(fd, &c,1);
         switch(state){
@@ -46,7 +50,7 @@ int receiveControlWord(int fd, unsigned char C){
                 }
                 break;
             case 1:
-                if(c == A){
+                if(c == A || c == A_1){
                     state = 2;
                 }else{
                     if (c == FLAG){
@@ -67,7 +71,12 @@ int receiveControlWord(int fd, unsigned char C){
                 }
                 break;
             case 3:
-                if(c == (A ^ C))
+                if(C == DISC || C == UA){
+                    A_check = A_1;
+                }else{
+                    A_check = A;
+                }
+                if(c == (A_check ^ C))
                     state = 4;
                 else
                     state = 0;
@@ -88,9 +97,11 @@ int receiveControlWord(int fd, unsigned char C){
 int verifyBCC2(unsigned char*messageReceived){
 
     unsigned char BCC2 = messageReceived[0];
-    for (int j = 1; j < (int)sizeof(messageReceived) - 2; j++){
+    for (int j = 1; j < (int)sizeof(messageReceived) - 1; j++){
         BCC2 ^= messageReceived[j];
     }
+
+
 
     if(BCC2 == messageReceived[(int)sizeof(messageReceived) - 1]){
         return TRUE;
@@ -103,15 +114,19 @@ int verifyBCC2(unsigned char*messageReceived){
 void sendControlWord(int fd, unsigned char C){
     unsigned char message[5];
     message[0] = FLAG;
-    message[1] = A;
+    if(C == DISC){
+        message[1] = A_1;
+    }else{
+        message[1] = A;    
+    }
     message[2] = C;
     message[3] = message[1] ^ message[2];
     message[4] = FLAG;
     write(fd,message,5);
 }
 
-void LLREAD(int fd){
-    unsigned char *messageReceived = (unsigned char*)malloc(0);
+int LLREAD(int fd, unsigned char * messageReceived){
+    //unsigned char *messageReceived = (unsigned char*)malloc(0);
     int sizeMessageReceived = 0;
 
     int acceptedFrame =  FALSE;
@@ -207,7 +222,7 @@ void LLREAD(int fd){
                         state = 7;     
                     }
                     acceptedFrame = TRUE;
-                    printf("RR SENT\n");
+                    printf("RR%i SENT\n",receivedFrame ^ 1);
                 }else{
                     if(receivedFrame == 0){
                         sendControlWord(fd,REJ0);
@@ -217,7 +232,7 @@ void LLREAD(int fd){
                         state = 7;     
                     }
                     acceptedFrame = FALSE;
-                    printf("REJ SENT\n");
+                    printf("REJ%i SENT\n",receivedFrame ^ 1);
                 }
                 break;
         }
@@ -227,27 +242,52 @@ void LLREAD(int fd){
     messageReceived = (unsigned char*)realloc(messageReceived,sizeof(messageReceived) - 1);
     sizeMessageReceived--;
     
-    if(acceptedFrame){
+    
+    int sizeReturn;
+
+    if(acceptedFrame){ 
         if(receivedFrame == expectedFrame){
+            /*printf("---------------------------------------------------------");
             printf("size mensagem recebida = %i\n", sizeMessageReceived) ;
             for(int i = 0; i< sizeMessageReceived;i++){
                 printf("Byte nº %i = %X\n",i,messageReceived[i]);
             }
+            printf("---------------------------------------------------------");*/
             expectedFrame ^= 1;
+            
+            sizeReturn = sizeMessageReceived;
         }else{
             //nao passar mensagem para applicationLayer
+            sizeReturn = -1;
         }
     }else{
         //nao passar mensagem para applicationLayer
+        sizeReturn = -1;
     } 
 
-    free(messageReceived);
+    return sizeReturn;
 }
 
-void LLOPEN(int fd){
+void LLCLOSE(int fd){
+    printf("LLCLOSE STARTED\n");
+    receiveControlWord(fd,DISC);
+    printf("DISC RECEIVED\n");
+    sendControlWord(fd,DISC);
+    printf("DISC SENT\n");
+    receiveControlWord(fd,UA);
+    printf("UA RECEIVED\n");
 
-    struct termios oldtio;
-    struct termios newtio;
+
+    if (tcsetattr(fd, TCSANOW, &oldtio) == -1)
+    {
+        perror("tcsetattr");
+        exit(-1);
+    }
+    close(fd);
+}
+
+
+void LLOPEN(int fd){
 
     if (tcgetattr(fd, &oldtio) == -1)
     {
@@ -275,26 +315,14 @@ void LLOPEN(int fd){
 
     printf("New termios structure set\n");
 
+
     if(receiveControlWord(fd,SET)){
         printf("SET RECEIVED\n");
         sendControlWord(fd,UA);
         printf("UA SENT\n");
     }
 
-    LLREAD(fd);
-
-    while(1);
-    
-    if (tcsetattr(fd, TCSANOW, &oldtio) == -1)
-    {
-        perror("tcsetattr");
-        exit(-1);
-    }
-
-    close(fd); 
 }
-
-
 
 
 
@@ -320,7 +348,28 @@ int main(int argc, char *argv[])
     }
 
     LLOPEN(fd);
-  
+
+    unsigned char* startPacket = (unsigned char *)malloc(sizeof(unsigned char) * 7);//ESTOU ASSUMIR PACKETSIZE
+    int fileSize;
+    
+    LLREAD(fd,startPacket);
+    fileSize = (startPacket[3] << 24) | (startPacket[4] << 16) | (startPacket[5] << 8) | startPacket[6];
+    printf("FILE HAS %i bytes\n",fileSize);
+
+    unsigned char* messageApp;
+    int sizeMessageApp;
+
+    while(TRUE){
+        sizeMessageApp = LLREAD(fd, messageApp );
+
+        if(sizeMessageApp != 0){
+            printf("RECEIVED MESSAGE SIZE:%i",sizeMessageApp);
+        }
+
+
+    }
+
+    LLCLOSE(fd);
 
     return 0;
 }

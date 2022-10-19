@@ -19,9 +19,9 @@
 
 #define FLAG (0x7E)
 #define A (0x03)
+#define A_1 (0x01)
 #define SET (0x03)
 #define UA (0x07)
-#define BCC (A^UA)
 #define DISC (0x0B)
 #define C0 (0x00)
 #define C1 (0x40)
@@ -33,15 +33,22 @@
 #define REJ0 (0x01)
 #define REJ1 (0x81) 
 
-
+//packet Application layer
+#define CP_START (0x02)
+#define CP_END (0x03)
+#define CP_TYPE_FILESIZE (0x00)
+#define CP_LENGTH_FILESIZE (0x04)
+#define Control_DATA_PACKET (0x01)
 #define BUF_SIZE 256
 
 #define TIMEOUT 3 //Tempo até Timeout
 #define MAX_SENDS 3 //Numero maximo de tentativas de envio
 
+struct termios newtio;
+struct termios oldtio;
 
 //alarm variables
-int alarmDisparouTimeout = FALSE;
+int alarmEnabled = FALSE;
 int alarmCount = 0;
 
 int UAreceived = FALSE;
@@ -52,28 +59,32 @@ volatile int STOP = FALSE;
 void sendControlWord(int fd, unsigned char C){
     unsigned char message[5];
     message[0] = FLAG;
-    message[1] = A;
+    if(C == DISC || C == UA){
+        message[1] = A_1;
+    }else{
+        message[1] = A;    
+    }
     message[2] = C;
     message[3] = message[1] ^ message[2];
     message[4] = FLAG;
     write(fd,message,5);
-
 }
 
 
 void alarmHandler(int signal)
 {
-    int alarmDisparouTimeout = TRUE;
+    alarmEnabled = FALSE;
     alarmCount++;
 
-    printf("Alarm #%d\n", alarmCount);
+    printf("AlarmHandler #%d\n", alarmCount);
 }
 
 //state Machine receive UA REJ0 REJ1 RR0 RR1 DISC
 void receiveControlWord(int fd, unsigned char * cReceived){
     int state = 0;
     unsigned char c;
-    while(state != 5 && !alarmDisparouTimeout){
+    unsigned char A_check;
+    while(state != 5 && alarmEnabled){
         read(fd, &c,1);
         switch(state){
             case 0:
@@ -82,7 +93,7 @@ void receiveControlWord(int fd, unsigned char * cReceived){
                 }
                 break;
             case 1:
-                if(c == A){
+                if(c == A || c == A_1){
                     state = 2;
                 }else{
                     if (c == FLAG){
@@ -104,16 +115,25 @@ void receiveControlWord(int fd, unsigned char * cReceived){
                 }
                 break;
             case 3:
-                if(c == (A ^ *cReceived))
+                
+                if(*cReceived == DISC){
+                    A_check = A_1;
+                }else{
+                    A_check = A;
+                }
+
+                if(c == (A_check ^ *cReceived))
                     state = 4;
                 else{
                     printf("BCC1 error\n");
+                    *cReceived = 0xFF; //arbitary value 
                     state = 0;
                 }
                 break;
             case 4:
                 if(c == FLAG){
                     state = 5;
+                    alarm(0);
                 }
                 else
                     state = 0;
@@ -122,7 +142,7 @@ void receiveControlWord(int fd, unsigned char * cReceived){
     }
 }
 
-void LLWRITE(int fd, unsigned char* msg, int size){
+int LLWRITE(int fd, unsigned char* msg, int size){
     unsigned char *frameFinal = (unsigned char *)malloc((size + 6) * sizeof(unsigned char));
     int sizeFrameFinal = size + 6;
 
@@ -167,8 +187,7 @@ void LLWRITE(int fd, unsigned char* msg, int size){
         BCC2 ^= msg[j];
     }
 
-    //TESTE BCC2 ERRADO
-    BCC2 = 0x55;
+    
 
     //Stuffing BCC2
     if(BCC2 == FLAG){
@@ -186,14 +205,14 @@ void LLWRITE(int fd, unsigned char* msg, int size){
     }
     
     frameFinal[k + 1] = FLAG;       
-    int alarmEnabled;
     //enviar FrameFinal
+    int stop = FALSE;
     do {
         write(fd,frameFinal,sizeFrameFinal);
-        printf("Frame sent %i\n", sizeFrameFinal);
+        printf("Frame sent nº %i size= %i\n", currentFrame, sizeFrameFinal);
         
         //iniciar Alarm
-        alarm(3);
+        alarm(TIMEOUT);
         alarmEnabled = TRUE;
         //ler ControlMessage
         unsigned char controlWordReceived;
@@ -201,27 +220,49 @@ void LLWRITE(int fd, unsigned char* msg, int size){
 
         if((controlWordReceived == RR0 && currentFrame == 1) || (controlWordReceived == RR1 && currentFrame == 0)){
             currentFrame ^= 1;
-            alarm(0);
             alarmCount = 0;
             alarmEnabled = FALSE;
+            stop = TRUE; 
             printf("Frame accepeted, %X received\n",controlWordReceived);
+            return sizeFrameFinal;
         }else if(controlWordReceived == REJ0 || controlWordReceived == REJ1 ){
             printf("Frame rejected, %X received\n",controlWordReceived);
-                
+            alarmCount++;   
+            printf("Alarm #%d\n", alarmCount);
+            alarm(0);
         }
-        if(alarmCount < MAX_SENDS){
-            alarmEnabled = FALSE;
-        }
+        controlWordReceived = 0xFF;
             
-    }while(alarmEnabled); //enquanto o alarm para ou é um reject 
+    }while(!stop && alarmCount < MAX_SENDS); //Para quando numero de tentativas maximo ou recebeu um RR correto 
     
+    return -1;
 }
 
-void LLOPEN(int fd){
-    struct termios newtio;
-    struct termios oldtio;
 
-    if (tcgetattr(fd, &oldtio) == -1)
+int LLCLOSE(int fd){
+    printf("LLCLOSE STARTED\n");
+    sendControlWord(fd, DISC);//A do Disc deve estar errado
+    printf("DISC SENT\n");
+    unsigned char charReceived;
+    receiveControlWord(fd,&charReceived);
+    if(charReceived == DISC){
+        printf("DISC RECEIVED\n");
+    }
+    sendControlWord(fd,UA);
+    printf("UA SENT\n");
+
+     if (tcsetattr(fd, TCSANOW, &oldtio) == -1)
+    {
+        perror("tcsetattr");
+        exit(-1);
+    }
+
+    close(fd);
+}
+
+int LLOPEN(int fd){
+
+     if (tcgetattr(fd, &oldtio) == -1)
     {
         perror("tcgetattr");
         exit(-1);
@@ -250,7 +291,7 @@ void LLOPEN(int fd){
     //Alarm setup
     (void)signal(SIGALRM, alarmHandler);
 
-    int alarmEnabled;
+    
 
     unsigned char c;
     do {
@@ -260,51 +301,72 @@ void LLOPEN(int fd){
         alarmEnabled = TRUE;
 
         unsigned char cReceived;
-        //tentar receber UA
-        while(!UAreceived && alarmEnabled){
-            receiveControlWord(fd,&cReceived);
-            if(cReceived == UA){
-                UAreceived = TRUE;
-                printf("UA RECEIVED\n");
-            }
+        receiveControlWord(fd,&cReceived);
+        if(cReceived == UA){
+            printf("UA received\n");
+            UAreceived = TRUE;
+            alarm(0);
         }
+    }while(!UAreceived && alarmCount < MAX_SENDS);
 
-        if(alarmCount < MAX_SENDS){
-            alarmEnabled = FALSE;
-        }
+    if(alarmCount > MAX_SENDS){
+        return FALSE;
+    }else{
+        return TRUE;
+    }
+}
 
-    }while(alarmEnabled);
+unsigned char* openFile(unsigned char *fileName, int* sizeFile){
+    FILE * f;
+    unsigned char* fileBytes;
 
-
-    unsigned char message2[3];
-
-
-    unsigned char message[2];
-    message[0] = 0x50;
-    message[1] = 0x70;
-    LLWRITE(fd, message,2); 
-
-
-
-    // Restore the old port settings
-    if (tcsetattr(fd, TCSANOW, &oldtio) == -1)
-    {
-        perror("tcsetattr");
+    f = fopen((char*)fileName,"rb");
+    if(f == NULL){
+        perror("Error opening file\n");
         exit(-1);
     }
 
-    close(fd);
+    fseek(f,0,SEEK_END);
 
-    
+    (*sizeFile) = ftell(f);
+
+    fseek(f,0,SEEK_SET);    
+
+    fileBytes = (unsigned char*)malloc(*sizeFile * sizeof(unsigned char));
+    fread(fileBytes,sizeof(unsigned char),*sizeFile,f);
+
+    return fileBytes;
 }
 
+//cria packet com tamanho do ficheiro
+unsigned char *createControlPacket(int start,int fileSize,int *sizeControlPacket){
+    unsigned char* controlPacket = (unsigned char*)malloc(sizeof(unsigned char) * 7);
+
+    if(start){
+        controlPacket[0] = CP_START;
+    }else{
+        controlPacket[0] = CP_END;
+    }
+    
+
+    controlPacket[1] = CP_TYPE_FILESIZE; //0
+    controlPacket[2] = CP_LENGTH_FILESIZE; //4
+    controlPacket[3] = (fileSize >> 24) & 0xFF; 
+    controlPacket[4] = (fileSize >> 16) & 0xFF; 
+    controlPacket[5] = (fileSize >> 8) & 0xFF; 
+    controlPacket[6] = fileSize & 0xFF;
+
+    *sizeControlPacket = (int)(sizeof(unsigned char) * 7);
+
+    return controlPacket;
+}
 
 
 int main(int argc, char *argv[])
 {
     const char *serialPortName = argv[1];
 
-    if (argc < 2)
+    if (argc < 3)
     {
         printf("Incorrect program usage\n"
                "Usage: %s <SerialPort>\n"
@@ -321,8 +383,72 @@ int main(int argc, char *argv[])
         exit(-1);
     }
 
-    LLOPEN(fd);
+
+    int fileSize;
+
+    unsigned char* fileBytes = openFile((unsigned char*)argv[2], &fileSize);
+
+    if(!LLOPEN(fd)){
+        printf("CONNECTION ESTABLISHMENT FAILED\n");
+        return(-1);
+    }
+
+    unsigned char*fileName = (unsigned char*)malloc(strlen(argv[2]));
+    fileName = (unsigned char*)argv[2];
+
+    int sizeControlPacket;
     
+    unsigned char * startPacket = createControlPacket(TRUE, fileSize,&sizeControlPacket);
+    LLWRITE(fd,startPacket,sizeControlPacket);
+    printf("START PACKET SENT\n");
+
+    int indice = 0;
+    int numPackets = 0;
+    int numPackage = 0;
+
+    int packetSize = 100;
+
+    while(indice < fileSize){
+        
+
+        //dividir o fileBytes em tramas 
+
+        //Criar packet com header
+        unsigned char* packet;
+
+        if(indice + packetSize > fileSize){
+            packetSize = fileSize - indice;
+        }
+        packet = (unsigned char*)malloc(packetSize);
+        
+        for(int i = 0; i < packetSize;i++){
+            packet[i] = fileBytes[indice];
+            indice++;
+        }
+
+        unsigned char* packetToSend;
+
+        packetToSend = (unsigned char*)malloc(packetSize + 4);
+        packetToSend[0] = Control_DATA_PACKET;
+        packetToSend[1] = numPackets % 255;
+        packetToSend[2] = fileSize / 256;
+        packetToSend[3] = fileSize % 256;
+        memcpy(packetToSend + 4,packet,packetSize);
+        packetSize += 4;
+        numPackets++;
+        numPackage++;
+
+        LLWRITE(fd,packetToSend,packetSize);
+
+    
+    }
+
+    unsigned char * endPacket = createControlPacket(FALSE, fileSize,&sizeControlPacket);
+    LLWRITE(fd,endPacket,sizeControlPacket);
+    printf("END PACKET SENT\n");
+
+
+    LLCLOSE(fd);
 
     return 0;
 }
