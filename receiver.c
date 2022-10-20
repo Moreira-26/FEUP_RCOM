@@ -30,7 +30,7 @@
 #define RR1 (0x85)
 #define REJ0 (0x01)
 #define REJ1 (0x81) 
-
+#define CP_END (0x03)
 volatile int STOP = FALSE;
 int expectedFrame = 0;
 
@@ -126,7 +126,6 @@ void sendControlWord(int fd, unsigned char C){
 }
 
 int LLREAD(int fd, unsigned char * messageReceived){
-    //unsigned char *messageReceived = (unsigned char*)malloc(0);
     int sizeMessageReceived = 0;
 
     int acceptedFrame =  FALSE;
@@ -243,8 +242,7 @@ int LLREAD(int fd, unsigned char * messageReceived){
     //retirar BCC2 da mensagem
     messageReceived = (unsigned char*)realloc(messageReceived,sizeof(messageReceived) - 1);
     sizeMessageReceived--;
-    
-    
+
     int sizeReturn;
 
     if(acceptedFrame){ 
@@ -318,7 +316,19 @@ void LLOPEN(int fd){
 
 }
 
-int isEndPacket(unsigned char* packetReceived){
+int isEndPacket(unsigned char* packetReceived,int sizePacketReceived, unsigned char* startPacket, int sizeStartPacket){
+    if(sizePacketReceived != sizeStartPacket){
+        return FALSE;
+    }
+    if(packetReceived[0] != CP_END){
+        return FALSE;
+    }else{
+        for(int i = 1; i < sizePacketReceived; i++){
+            if(packetReceived[i] != startPacket[i]){
+                return FALSE;
+            }
+        }
+    }
     return TRUE; //TODO 
 }
 
@@ -330,6 +340,13 @@ unsigned char * removeControlHeader(unsigned char *packetReceived,int sizePacket
         j++;
     }
     return newPacketWithoutHeader;
+}
+
+void createFile(unsigned char* fileData, int fileSize){
+    FILE *fp;
+    fp = fopen("penguinRECEIVER.gif","wb+");
+    fwrite((void*)fileData,1,fileSize,fp);
+    fclose(fp);
 }
 
 int main(int argc, char *argv[])
@@ -359,27 +376,30 @@ int main(int argc, char *argv[])
     unsigned char* fileBytes ;
     int fileSize;
     int index = 0;
+    int sizeStartPacket;
 
-    LLREAD(fd,startPacket);
+    sizeStartPacket = LLREAD(fd,startPacket);
     fileSize = (startPacket[3] << 24) | (startPacket[4] << 16) | (startPacket[5] << 8) | startPacket[6];
     printf("FILE HAS %i bytes\n",fileSize);
 
     fileBytes = (unsigned char*)malloc(fileSize * sizeof(unsigned char));
     
-    unsigned char * packetReceived = (unsigned char*)malloc(0);
+    unsigned char * packetReceived;
     int sizePacketReceived;
     while(TRUE){
+        packetReceived = (unsigned char*)malloc(0);
         sizePacketReceived = LLREAD(fd,packetReceived);
         if(sizePacketReceived > 0){
-            if(isEndPacket(packetReceived)){
+            if(isEndPacket(packetReceived,sizePacketReceived,startPacket,sizeStartPacket)){
                 printf("End Packect received\n");
                 break;
             }else{
                 packetReceived = removeControlHeader(packetReceived,sizePacketReceived);
                 memcpy(fileBytes + index,packetReceived,sizePacketReceived - 4);
-                index += sizePacketReceived - 4;
+                index += (sizePacketReceived - 4);
             }
         }
+        free(packetReceived);
 
     }
 
@@ -391,11 +411,6 @@ int main(int argc, char *argv[])
     return 0;
 }
 
-void createFile(unsigned char* fileData, int fileSize){
-    FILE *fp;
-    fp = fopen("penguin.gif","wb+");
-    fwrite((void*)fileData,1,fileSize,fp);
-    fclose(fp);
-}
+
 
 

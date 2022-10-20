@@ -56,6 +56,8 @@ int currentFrame = 0;
 
 volatile int STOP = FALSE;
 
+int sequenceNumberPacket = 0;
+
 void sendControlWord(int fd, unsigned char C){
     unsigned char message[5];
     message[0] = FLAG;
@@ -204,7 +206,10 @@ int LLWRITE(int fd, unsigned char* msg, int size){
         frameFinal[k] = BCC2;
     }
     
-    frameFinal[k + 1] = FLAG;       
+    frameFinal[k + 1] = FLAG; 
+    for(int i = 0; i < sizeFrameFinal; i++){
+        printf("frameFinal byte:%X\n",frameFinal[i]);
+    }      
     //enviar FrameFinal
     int stop = FALSE;
     do {
@@ -235,6 +240,8 @@ int LLWRITE(int fd, unsigned char* msg, int size){
             
     }while(!stop && alarmCount < MAX_SENDS); //Para quando numero de tentativas maximo ou recebeu um RR correto 
     
+    free(frameFinal);
+
     if(alarmCount >= MAX_SENDS){
         printf("time-out\n");
         exit(-1);
@@ -247,9 +254,9 @@ int LLCLOSE(int fd){
     unsigned char charReceived;
     printf("LLCLOSE STARTED\n");
     do{
+        sendControlWord(fd, DISC);
         alarm(3);
-        alarmEnabled = TRUE;
-        sendControlWord(fd, DISC);//A do Disc deve estar errado
+        alarmEnabled = TRUE;    
         printf("DISC SENT\n");
         receiveControlWord(fd,&charReceived);
         if(charReceived == DISC){
@@ -381,6 +388,37 @@ unsigned char *createControlPacket(int start,int fileSize,int *sizeControlPacket
     return controlPacket;
 }
 
+unsigned char* addHeaderPacket(unsigned char* packet, int fileSize, int packetSize ){
+    unsigned char* packetToSend;
+
+    packetToSend = (unsigned char*)malloc(packetSize + 4);
+    packetToSend[0] = Control_DATA_PACKET;
+    packetToSend[1] = sequenceNumberPacket % 255;
+    packetToSend[2] = fileSize / 256;
+    packetToSend[3] = fileSize % 256;
+    memcpy(packetToSend + 4,packet,packetSize);
+    sequenceNumberPacket++;
+    return packetToSend;
+}
+
+unsigned char* createPacket(unsigned char* fileData,int*indexFile, int fileSize,int* packetSize){
+    
+    if(*indexFile + *packetSize > fileSize){
+        *packetSize = fileSize  - *indexFile;
+    }
+
+    unsigned char* packet = (unsigned char*)malloc(*packetSize * sizeof(unsigned char));
+    
+    printf("aqui\n");
+    for(int i = 0; i < *packetSize;i++){
+        packet[i] = fileData[*indexFile];
+        (*indexFile)++;
+    }
+
+    return packet;
+}
+
+
 
 int main(int argc, char *argv[])
 {
@@ -405,7 +443,6 @@ int main(int argc, char *argv[])
 
 
     int fileSize;
-
     unsigned char* fileBytes = openFile((unsigned char*)argv[2], &fileSize);
 
     if(!LLOPEN(fd)){
@@ -419,45 +456,35 @@ int main(int argc, char *argv[])
     LLWRITE(fd,startPacket,sizeControlPacket);
     printf("START PACKET SENT\n");
 
-    int indice = 0;
-    int packetSize = 20;
-
-    while(indice < fileSize){
+    int indexFile = 0;
+    int packetSize = 100;
+    int numPackets = 0;
+    int numPackage = 0;
+    while(indexFile < fileSize && packetSize == 100){
+        unsigned char* packet = createPacket(fileBytes,&indexFile,fileSize,&packetSize);
         
 
-        unsigned char* packet = (unsigned char*)malloc(packetSize * sizeof(unsigned char));
-        
-        for(int i = 0; i < packetSize;i++){
-            packet[i] = fileBytes[indice];
-            indice++;
-        }
+        unsigned char* packetToSend = addHeaderPacket(packet,fileSize,packetSize);
+        int packetToSendSize = packetSize + 4; 
 
-        unsigned char* packetToSend;
-
-        packetToSend = (unsigned char*)malloc(packetSize + 4);
-        packetToSend[0] = Control_DATA_PACKET;
-        packetToSend[1] = numPackets % 255;
-        packetToSend[2] = fileSize / 256;
-        packetToSend[3] = fileSize % 256;
-        memcpy(packetToSend + 4,packet,packetSize);
-        packetSize += 4;
-        numPackets++;
-        numPackage++;
+        LLWRITE(fd,packetToSend,packetToSendSize);
         
-        //FALTA CONSTRUIR PACOTE COM HEADER DA APPLICATION LAYER E ENVIAR 
-        //VER NOTAS O PROBLEMA DO SIZE DO PACKET
+        free(packet);
+        free(packetToSend);
     }
 
-    //unsigned char * endPacket = createControlPacket(FALSE, fileSize,&sizeControlPacket);
-    //LLWRITE(fd,endPacket,sizeControlPacket);
-    //printf("END PACKET SENT\n");
+    unsigned char * endPacket = createControlPacket(FALSE, fileSize,&sizeControlPacket);
+    LLWRITE(fd,endPacket,sizeControlPacket);
+    printf("END PACKET SENT\n");
 
 
     LLCLOSE(fd);
 
+
     return 0;
 }
- 
+
+
 
 
 
