@@ -39,7 +39,7 @@ struct termios newtio;
 
 int receiveControlWord(int fd, unsigned char C){
     int state = 0;
-    unsigned char c;
+    unsigned char c = 0xFF;
     unsigned char A_check;
     while(state != 5){
         read(fd, &c,1);
@@ -214,10 +214,10 @@ int LLREAD(int fd, unsigned char * messageReceived){
                 break;
             case 6:
                 if(verifyBCC2(messageReceived)){
-                    if(receivedFrame == 0){
+                    if(receivedFrame == 0 && expectedFrame == 0){
                         sendControlWord(fd,RR1);
                         state = 7;
-                    }else{
+                    }else if(receivedFrame == 1 && expectedFrame == 1){
                         sendControlWord(fd,RR0);
                         state = 7;     
                     }
@@ -274,9 +274,7 @@ void LLCLOSE(int fd){
     printf("DISC RECEIVED\n");
     sendControlWord(fd,DISC);
     printf("DISC SENT\n");
-    receiveControlWord(fd,UA);
-    printf("UA RECEIVED\n");
-
+    
 
     if (tcsetattr(fd, TCSANOW, &oldtio) == -1)
     {
@@ -348,6 +346,7 @@ int main(int argc, char *argv[])
     }
 
     LLOPEN(fd);
+    unsigned char* messageReceived = (unsigned char*)malloc(0);
 
     unsigned char* startPacket = (unsigned char *)malloc(sizeof(unsigned char) * 7);//ESTOU ASSUMIR PACKETSIZE
     int fileSize;
@@ -356,22 +355,24 @@ int main(int argc, char *argv[])
     fileSize = (startPacket[3] << 24) | (startPacket[4] << 16) | (startPacket[5] << 8) | startPacket[6];
     printf("FILE HAS %i bytes\n",fileSize);
 
-    unsigned char* messageApp;
+    unsigned char* messageApp = (unsigned char*)malloc(0);
     int sizeMessageApp;
+    
+    int end= FALSE;
 
-    while(TRUE){
+    while(!end){
         sizeMessageApp = LLREAD(fd, messageApp );
-
-        if(sizeMessageApp != 0){
-            printf("RECEIVED MESSAGE SIZE:%i",sizeMessageApp);
+        for(int i = 0; i < sizeMessageApp;i++){
+            printf("%X",messageApp[i]);
         }
+     
+        
 
 
     }
-
+    
     LLCLOSE(fd);
 
     return 0;
 }
-
 
