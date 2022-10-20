@@ -235,21 +235,40 @@ int LLWRITE(int fd, unsigned char* msg, int size){
             
     }while(!stop && alarmCount < MAX_SENDS); //Para quando numero de tentativas maximo ou recebeu um RR correto 
     
+    if(alarmCount >= MAX_SENDS){
+        printf("time-out\n");
+        exit(-1);
+    }
     return -1;
 }
 
 
 int LLCLOSE(int fd){
-    printf("LLCLOSE STARTED\n");
-    sendControlWord(fd, DISC);//A do Disc deve estar errado
-    printf("DISC SENT\n");
     unsigned char charReceived;
-    receiveControlWord(fd,&charReceived);
-    if(charReceived == DISC){
-        printf("DISC RECEIVED\n");
+    printf("LLCLOSE STARTED\n");
+    do{
+        alarm(3);
+        alarmEnabled = TRUE;
+        sendControlWord(fd, DISC);//A do Disc deve estar errado
+        printf("DISC SENT\n");
+        receiveControlWord(fd,&charReceived);
+        if(charReceived == DISC){
+            printf("DISC RECEIVED\n");
+            alarmCount = 0;
+        }else{
+            printf("ERROR RECEIVING DISC\n");
+            alarmCount++;
+            alarm(0);
+            charReceived = 0xFF;
+        }
+    }while((charReceived != DISC) || (alarmCount > MAX_SENDS) );
+    
+    if(alarmCount >= MAX_SENDS){
+        printf("time-out\n");
+        exit(-1);
     }
-    sendControlWord(fd,UA);
     printf("UA SENT\n");
+    sendControlWord(fd,UA);
 
      if (tcsetattr(fd, TCSANOW, &oldtio) == -1)
     {
@@ -305,11 +324,12 @@ int LLOPEN(int fd){
         if(cReceived == UA){
             printf("UA received\n");
             UAreceived = TRUE;
+            alarmCount = 0;
             alarm(0);
         }
     }while(!UAreceived && alarmCount < MAX_SENDS);
 
-    if(alarmCount > MAX_SENDS){
+    if(alarmCount >= MAX_SENDS){
         return FALSE;
     }else{
         return TRUE;
@@ -389,9 +409,16 @@ int main(int argc, char *argv[])
     unsigned char* fileBytes = openFile((unsigned char*)argv[2], &fileSize);
 
     if(!LLOPEN(fd)){
-        printf("CONNECTION ESTABLISHMENT FAILED\n");
-        return(-1);
+        printf("time-out LLOPEN\n");
+        exit(-1);
     }
+    /*
+    unsigned char message[3];
+    message[0] = 0xAA;
+    message[1] = 0xBB;
+    message[2] = 0xCC;
+
+    LLWRITE(fd, message, 3);*/
 
     unsigned char*fileName = (unsigned char*)malloc(strlen(argv[2]));
     fileName = (unsigned char*)argv[2];
@@ -401,12 +428,12 @@ int main(int argc, char *argv[])
     unsigned char * startPacket = createControlPacket(TRUE, fileSize,&sizeControlPacket);
     LLWRITE(fd,startPacket,sizeControlPacket);
     printf("START PACKET SENT\n");
-
+    
     int indice = 0;
     int numPackets = 0;
     int numPackage = 0;
 
-    int packetSize = 100;
+    int packetSize = 50;
 
     while(indice < fileSize){
         
@@ -416,9 +443,6 @@ int main(int argc, char *argv[])
         //Criar packet com header
         unsigned char* packet;
 
-        if(indice + packetSize > fileSize){
-            packetSize = fileSize - indice;
-        }
         packet = (unsigned char*)malloc(packetSize);
         
         for(int i = 0; i < packetSize;i++){
@@ -438,7 +462,13 @@ int main(int argc, char *argv[])
         numPackets++;
         numPackage++;
 
-        LLWRITE(fd,packetToSend,packetSize);
+        //LLWRITE(fd,packetToSend,packetSize);
+        printf("--------------------------------------------------------\n");
+        for(int j= 0; j < 110; j++){
+            printf("%X ",packetToSend[j]);
+        }
+        printf("--------------------------------------------------------\n");
+
 
     
     }
