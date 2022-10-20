@@ -94,16 +94,16 @@ int receiveControlWord(int fd, unsigned char C){
 }
 
 
-int verifyBCC2(unsigned char*messageReceived){
+int verifyBCC2(unsigned char*messageReceived, int sizeMessageReceived){
 
     unsigned char BCC2 = messageReceived[0];
-    for (int j = 1; j < (int)sizeof(messageReceived) - 1; j++){
+    for (int j = 1; j < sizeMessageReceived - 1; j++){
         BCC2 ^= messageReceived[j];
     }
 
 
 
-    if(BCC2 == messageReceived[(int)sizeof(messageReceived) - 1]){
+    if(BCC2 == messageReceived[sizeMessageReceived - 1]){
         return TRUE;
     }else{
         return FALSE;
@@ -134,7 +134,7 @@ int LLREAD(int fd, unsigned char * messageReceived){
 
     int state = 0;
     unsigned char readChar,saveC;
-    
+    int i= 0;
     while(state != 7){
         read(fd,&readChar,1);
         switch(state){
@@ -173,6 +173,7 @@ int LLREAD(int fd, unsigned char * messageReceived){
                 if(readChar == (A^saveC)){
                     state = 4;
                 }else{
+                    printf("BCC1 ERROR");
                     state = 0;
                 }
                 break;
@@ -200,7 +201,7 @@ int LLREAD(int fd, unsigned char * messageReceived){
                     messageReceived[sizeMessageReceived - 1 ] = ESC;
                 }else{
                     //REJ pedir de novo? Char inválido a seguir ao ESC
-                    /*
+                    /*messageApp
                     if(frame == 0){
                         sendControlWord(fd,REJ1);
                         state = 7;
@@ -213,11 +214,11 @@ int LLREAD(int fd, unsigned char * messageReceived){
                 state = 4;
                 break;
             case 6:
-                if(verifyBCC2(messageReceived)){
-                    if(receivedFrame == 0 && expectedFrame == 0){
+                if(verifyBCC2(messageReceived,sizeMessageReceived)){
+                    if(receivedFrame == 0){
                         sendControlWord(fd,RR1);
                         state = 7;
-                    }else if(receivedFrame == 1 && expectedFrame == 1){
+                    }else if(receivedFrame == 1){
                         sendControlWord(fd,RR0);
                         state = 7;     
                     }
@@ -233,6 +234,7 @@ int LLREAD(int fd, unsigned char * messageReceived){
                     }
                     acceptedFrame = FALSE;
                     printf("REJ%i SENT\n",receivedFrame ^ 1);
+                    printf("BCC2 error\n");
                 }
                 break;
         }
@@ -247,12 +249,6 @@ int LLREAD(int fd, unsigned char * messageReceived){
 
     if(acceptedFrame){ 
         if(receivedFrame == expectedFrame){
-            /*printf("---------------------------------------------------------");
-            printf("size mensagem recebida = %i\n", sizeMessageReceived) ;
-            for(int i = 0; i< sizeMessageReceived;i++){
-                printf("Byte nº %i = %X\n",i,messageReceived[i]);
-            }
-            printf("---------------------------------------------------------");*/
             expectedFrame ^= 1;
             
             sizeReturn = sizeMessageReceived;
@@ -322,7 +318,19 @@ void LLOPEN(int fd){
 
 }
 
+int isEndPacket(unsigned char* packetReceived){
+    return TRUE; //TODO 
+}
 
+unsigned char * removeControlHeader(unsigned char *packetReceived,int sizePacketReceived){
+    unsigned char* newPacketWithoutHeader = (unsigned char*)malloc(sizePacketReceived - 4);
+    int j = 4;
+    for(int i = 0; i < (sizePacketReceived - 4);i++){
+        newPacketWithoutHeader[i] = packetReceived[j];
+        j++;
+    }
+    return newPacketWithoutHeader;
+}
 
 int main(int argc, char *argv[])
 {
@@ -346,33 +354,48 @@ int main(int argc, char *argv[])
     }
 
     LLOPEN(fd);
-    unsigned char* messageReceived = (unsigned char*)malloc(0);
 
-    unsigned char* startPacket = (unsigned char *)malloc(sizeof(unsigned char) * 7);//ESTOU ASSUMIR PACKETSIZE
+    unsigned char* startPacket = (unsigned char*)malloc(0);
+    unsigned char* fileBytes ;
     int fileSize;
-    
+    int index = 0;
+
     LLREAD(fd,startPacket);
     fileSize = (startPacket[3] << 24) | (startPacket[4] << 16) | (startPacket[5] << 8) | startPacket[6];
     printf("FILE HAS %i bytes\n",fileSize);
 
-    unsigned char* messageApp = (unsigned char*)malloc(0);
-    int sizeMessageApp;
+    fileBytes = (unsigned char*)malloc(fileSize * sizeof(unsigned char));
     
-    int end= FALSE;
-
-    while(!end){
-        sizeMessageApp = LLREAD(fd, messageApp );
-        for(int i = 0; i < sizeMessageApp;i++){
-            printf("%X",messageApp[i]);
+    unsigned char * packetReceived = (unsigned char*)malloc(0);
+    int sizePacketReceived;
+    while(TRUE){
+        sizePacketReceived = LLREAD(fd,packetReceived);
+        if(sizePacketReceived > 0){
+            if(isEndPacket(packetReceived)){
+                printf("End Packect received\n");
+                break;
+            }else{
+                packetReceived = removeControlHeader(packetReceived,sizePacketReceived);
+                memcpy(fileBytes + index,packetReceived,sizePacketReceived - 4);
+                index += sizePacketReceived - 4;
+            }
         }
-     
-        
-
 
     }
-    
+
+    createFile(fileBytes,fileSize);
+
+
     LLCLOSE(fd);
 
     return 0;
 }
+
+void createFile(unsigned char* fileData, int fileSize){
+    FILE *fp;
+    fp = fopen("penguin.gif","wb+");
+    fwrite((void*)fileData,1,fileSize,fp);
+    fclose(fp);
+}
+
 

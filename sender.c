@@ -217,6 +217,7 @@ int LLWRITE(int fd, unsigned char* msg, int size){
         //ler ControlMessage
         unsigned char controlWordReceived;
         receiveControlWord(fd, &controlWordReceived);
+        printf("Control Word Received:%X\n",controlWordReceived );
 
         if((controlWordReceived == RR0 && currentFrame == 1) || (controlWordReceived == RR1 && currentFrame == 0)){
             currentFrame ^= 1;
@@ -226,9 +227,8 @@ int LLWRITE(int fd, unsigned char* msg, int size){
             printf("Frame accepeted, %X received\n",controlWordReceived);
             return sizeFrameFinal;
         }else if(controlWordReceived == REJ0 || controlWordReceived == REJ1 ){
-            printf("Frame rejected, %X received\n",controlWordReceived);
-            alarmCount++;   
-            printf("Alarm #%d\n", alarmCount);
+            printf("Frame rejected, %X received\n",controlWordReceived); 
+            alarmCount = 0;
             alarm(0);
         }
         controlWordReceived = 0xFF;
@@ -412,38 +412,20 @@ int main(int argc, char *argv[])
         printf("time-out LLOPEN\n");
         exit(-1);
     }
-    /*
-    unsigned char message[3];
-    message[0] = 0xAA;
-    message[1] = 0xBB;
-    message[2] = 0xCC;
-
-    LLWRITE(fd, message, 3);*/
-
-    unsigned char*fileName = (unsigned char*)malloc(strlen(argv[2]));
-    fileName = (unsigned char*)argv[2];
 
     int sizeControlPacket;
     
     unsigned char * startPacket = createControlPacket(TRUE, fileSize,&sizeControlPacket);
     LLWRITE(fd,startPacket,sizeControlPacket);
     printf("START PACKET SENT\n");
-    
-    int indice = 0;
-    int numPackets = 0;
-    int numPackage = 0;
 
-    int packetSize = 50;
+    int indice = 0;
+    int packetSize = 20;
 
     while(indice < fileSize){
         
 
-        //dividir o fileBytes em tramas 
-
-        //Criar packet com header
-        unsigned char* packet;
-
-        packet = (unsigned char*)malloc(packetSize);
+        unsigned char* packet = (unsigned char*)malloc(packetSize * sizeof(unsigned char));
         
         for(int i = 0; i < packetSize;i++){
             packet[i] = fileBytes[indice];
@@ -461,21 +443,14 @@ int main(int argc, char *argv[])
         packetSize += 4;
         numPackets++;
         numPackage++;
-
-        //LLWRITE(fd,packetToSend,packetSize);
-        printf("--------------------------------------------------------\n");
-        for(int j= 0; j < 110; j++){
-            printf("%X ",packetToSend[j]);
-        }
-        printf("--------------------------------------------------------\n");
-
-
-    
+        
+        //FALTA CONSTRUIR PACOTE COM HEADER DA APPLICATION LAYER E ENVIAR 
+        //VER NOTAS O PROBLEMA DO SIZE DO PACKET
     }
 
-    unsigned char * endPacket = createControlPacket(FALSE, fileSize,&sizeControlPacket);
-    LLWRITE(fd,endPacket,sizeControlPacket);
-    printf("END PACKET SENT\n");
+    //unsigned char * endPacket = createControlPacket(FALSE, fileSize,&sizeControlPacket);
+    //LLWRITE(fd,endPacket,sizeControlPacket);
+    //printf("END PACKET SENT\n");
 
 
     LLCLOSE(fd);

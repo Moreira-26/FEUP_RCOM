@@ -38,6 +38,10 @@ Fazer LLClose do Receiver
 	Manda Disc
 	Espera Ua	
 
+tratar de duplicates
+
+recebe um rej temos que contar como um incremento 
+
 
 State machine geral para ler interpretar tramas SET/DISC/UA/RR/REJ
 
@@ -45,8 +49,32 @@ Perguntar verificar receber mensagens corretas mas que nao se aplicam ao context
 
 Quando espera pelo Disc e nao recebe o que acontece?
 
-Quando LLCLOSE da erro?
+Quando LLCLOSE da erro? timeout 
 
 ver toda a parte da application layer
+
+PROBLEMA A PARTIR DE CERTO TAMANHO DE PACKET A INFORMAÇÃO É ALTERADA, SE MANDAR UM PACKET COM 40 BYTES TUDO
+COM 0xFF E FOR VER DO LADO DO RECEIVER A INFORMAÇÃO É ALTERADA
+
+
+
+
+
+unsigned char* messageApp = (unsigned char*)malloc(40*sizeof(unsigned char));
+    //sleep(1); 
+    int sizeMessageApp = -1;
+    sizeMessageApp = LLREAD(fd, messageApp);    
+    
+    printf("Size:%i\n",sizeMessageApp);
+    for(int i = 0; i < 40; i++){
+        printf("%X\n",messageApp[i]);
+    }
+    free(messageApp);
+
+unsigned char Packet[40];
+
+for(int i = 0; i < 40; i++){
+Packet[i] = 0xFF;
+}
 
 
