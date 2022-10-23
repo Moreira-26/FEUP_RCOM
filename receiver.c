@@ -102,7 +102,6 @@ int verifyBCC2(unsigned char*messageReceived, int sizeMessageReceived){
     }
 
 
-
     if(BCC2 == messageReceived[sizeMessageReceived - 1]){
         return TRUE;
     }else{
@@ -172,7 +171,7 @@ int LLREAD(int fd, unsigned char * messageReceived){
                 if(readChar == (A^saveC)){
                     state = 4;
                 }else{
-                    printf("BCC1 ERROR");
+                    printf("error in the protocol\n");
                     state = 0;
                 }
                 break;
@@ -198,33 +197,35 @@ int LLREAD(int fd, unsigned char * messageReceived){
                     sizeMessageReceived++;
                     messageReceived = (unsigned char*)realloc(messageReceived, sizeMessageReceived);
                     messageReceived[sizeMessageReceived - 1 ] = ESC;
-                }else{
-                    //REJ pedir de novo? Char inválido a seguir ao ESC
-                    /*messageApp
-                    if(frame == 0){
-                        sendControlWord(fd,REJ1);
-                        state = 7;
-                    }else{
-                        sendControlWord(fd,REJ0);
-                        state = 7;     
-                    }
-                    */
                 }
                 state = 4;
                 break;
             case 6:
-                if(verifyBCC2(messageReceived,sizeMessageReceived)){
-                    if(receivedFrame == 0){
-                        sendControlWord(fd,RR1);
-                        state = 7;
-                    }else if(receivedFrame == 1){
-                        sendControlWord(fd,RR0);
-                        state = 7;     
+                if(receivedFrame == expectedFrame){
+                    if(verifyBCC2(messageReceived,sizeMessageReceived)){
+                        if(receivedFrame == 0){
+                            sendControlWord(fd,RR1);
+                            state = 7;
+                        }else if(receivedFrame == 1){
+                            sendControlWord(fd,RR0);
+                            state = 7;     
+                        }
+                        acceptedFrame = TRUE;
+                    }else{
+                        if(receivedFrame == 0){
+                            sendControlWord(fd,REJ0);
+                            state = 7;
+                        }else{
+                            sendControlWord(fd,REJ1);
+                            state = 7;     
+                        }
+                        acceptedFrame = FALSE;  
+                        printf("error in the data\n");
                     }
-                    acceptedFrame = TRUE;
-                    printf("RR%i SENT\n",receivedFrame ^ 1);
                 }else{
-                    if(receivedFrame == 0){
+                    //Frame recebido repetido
+                    printf("duplicate frame\n");
+                    if(expectedFrame == 0){
                         sendControlWord(fd,REJ0);
                         state = 7;
                     }else{
@@ -232,15 +233,14 @@ int LLREAD(int fd, unsigned char * messageReceived){
                         state = 7;     
                     }
                     acceptedFrame = FALSE;
-                    printf("REJ%i SENT\n",receivedFrame ^ 1);
-                    printf("BCC2 error\n");
                 }
+                
                 break;
         }
     }
 
     //retirar BCC2 da mensagem
-    messageReceived = (unsigned char*)realloc(messageReceived,sizeof(messageReceived) - 1);
+    messageReceived = (unsigned char*)realloc(messageReceived,sizeMessageReceived - 1);
     sizeMessageReceived--;
 
     int sizeReturn;
@@ -251,11 +251,9 @@ int LLREAD(int fd, unsigned char * messageReceived){
             
             sizeReturn = sizeMessageReceived;
         }else{
-            //nao passar mensagem para applicationLayer
             sizeReturn = -1;
         }
     }else{
-        //nao passar mensagem para applicationLayer
         sizeReturn = -1;
     } 
 
@@ -410,7 +408,3 @@ int main(int argc, char *argv[])
 
     return 0;
 }
-
-
-
-

@@ -1,4 +1,4 @@
-// Read from serial port in non-canonical mode
+    // Read from serial port in non-canonical mode
 #include <fcntl.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -78,7 +78,7 @@ void alarmHandler(int signal)
     alarmEnabled = FALSE;
     alarmCount++;
 
-    printf("AlarmHandler #%d\n", alarmCount);
+    printf("time-out #%i\n", alarmCount);
 }
 
 //state Machine receive UA REJ0 REJ1 RR0 RR1 DISC
@@ -127,7 +127,6 @@ void receiveControlWord(int fd, unsigned char * cReceived){
                 if(c == (A_check ^ *cReceived))
                     state = 4;
                 else{
-                    printf("BCC1 error\n");
                     *cReceived = 0xFF; //arbitary value 
                     state = 0;
                 }
@@ -206,15 +205,11 @@ int LLWRITE(int fd, unsigned char* msg, int size){
         frameFinal[k] = BCC2;
     }
     
-    frameFinal[k + 1] = FLAG; 
-    for(int i = 0; i < sizeFrameFinal; i++){
-        printf("frameFinal byte:%X\n",frameFinal[i]);
-    }      
+    frameFinal[k + 1] = FLAG;  
     //enviar FrameFinal
     int stop = FALSE;
     do {
         write(fd,frameFinal,sizeFrameFinal);
-        printf("Frame sent nº %i size= %i\n", currentFrame, sizeFrameFinal);
         
         //iniciar Alarm
         alarm(TIMEOUT);
@@ -222,17 +217,15 @@ int LLWRITE(int fd, unsigned char* msg, int size){
         //ler ControlMessage
         unsigned char controlWordReceived;
         receiveControlWord(fd, &controlWordReceived);
-        printf("Control Word Received:%X\n",controlWordReceived );
 
         if((controlWordReceived == RR0 && currentFrame == 1) || (controlWordReceived == RR1 && currentFrame == 0)){
             currentFrame ^= 1;
             alarmCount = 0;
             alarmEnabled = FALSE;
             stop = TRUE; 
-            printf("Frame accepeted, %X received\n",controlWordReceived);
             return sizeFrameFinal;
         }else if(controlWordReceived == REJ0 || controlWordReceived == REJ1 ){
-            printf("Frame rejected, %X received\n",controlWordReceived); 
+            printf("REJ received\n"); 
             alarmCount = 0;
             alarm(0);
         }
@@ -255,29 +248,26 @@ int LLCLOSE(int fd){
     printf("LLCLOSE STARTED\n");
     do{
         sendControlWord(fd, DISC);
-        alarm(3);
+        alarm(TIMEOUT);
         alarmEnabled = TRUE;    
         printf("DISC SENT\n");
         receiveControlWord(fd,&charReceived);
         if(charReceived == DISC){
             printf("DISC RECEIVED\n");
             alarmCount = 0;
-        }else{
-            printf("ERROR RECEIVING DISC\n");
-            alarmCount++;
             alarm(0);
-            charReceived = 0xFF;
+        }else{
+            charReceived = 0xFF;    
         }
-    }while((charReceived != DISC) || (alarmCount > MAX_SENDS) );
+    }while((charReceived != DISC) && (alarmCount < MAX_SENDS) );
     
     if(alarmCount >= MAX_SENDS){
-        printf("time-out\n");
         exit(-1);
     }
     printf("UA SENT\n");
     sendControlWord(fd,UA);
 
-     if (tcsetattr(fd, TCSANOW, &oldtio) == -1)
+    if (tcsetattr(fd, TCSANOW, &oldtio) == -1)
     {
         perror("tcsetattr");
         exit(-1);
@@ -323,7 +313,7 @@ int LLOPEN(int fd){
     do {
         sendControlWord(fd,SET);
         printf("SET SENT\n");
-        alarm(3);
+        alarm(TIMEOUT);
         alarmEnabled = TRUE;
 
         unsigned char cReceived;
@@ -408,8 +398,8 @@ unsigned char* createPacket(unsigned char* fileData,int*indexFile, int fileSize,
     }
 
     unsigned char* packet = (unsigned char*)malloc(*packetSize * sizeof(unsigned char));
-    
-    printf("aqui\n");
+
+
     for(int i = 0; i < *packetSize;i++){
         packet[i] = fileData[*indexFile];
         (*indexFile)++;
@@ -483,7 +473,6 @@ int main(int argc, char *argv[])
 
     return 0;
 }
-
 
 
 
