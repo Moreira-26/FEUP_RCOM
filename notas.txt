@@ -40,21 +40,7 @@ Fazer LLClose do Receiver
 
 tratar de duplicates
 
-recebe um rej temos que contar como um incremento 
-
-
-State machine geral para ler interpretar tramas SET/DISC/UA/RR/REJ
-
-Perguntar verificar receber mensagens corretas mas que nao se aplicam ao contexto 
-
-Quando espera pelo Disc e nao recebe o que acontece?
-
-Quando LLCLOSE da erro? timeout 
-
 ver toda a parte da application layer
-
-PROBLEMA A PARTIR DE CERTO TAMANHO DE PACKET A INFORMAÇÃO É ALTERADA, SE MANDAR UM PACKET COM 40 BYTES TUDO
-COM 0xFF E FOR VER DO LADO DO RECEIVER A INFORMAÇÃO É ALTERADA
 
 VERIFICAÇÃO RECEBER TRAMA REPETIDA 
 
