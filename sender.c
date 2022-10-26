@@ -40,6 +40,7 @@
 #define CP_LENGTH_FILESIZE (0x04)
 #define Control_DATA_PACKET (0x01)
 #define BUF_SIZE 256
+#define PACKET_SIZE 500
 
 #define TIMEOUT 3 //Tempo até Timeout
 #define MAX_SENDS 3 //Numero maximo de tentativas de envio
@@ -447,10 +448,10 @@ int main(int argc, char *argv[])
     printf("START PACKET SENT\n");
 
     int indexFile = 0;
-    int packetSize = 100;
+    int packetSize = PACKET_SIZE;
     int numPackets = 0;
     int numPackage = 0;
-    while(indexFile < fileSize && packetSize == 100){
+    while(indexFile < fileSize && packetSize == PACKET_SIZE){
         unsigned char* packet = createPacket(fileBytes,&indexFile,fileSize,&packetSize);
         
 

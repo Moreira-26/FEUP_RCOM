@@ -354,8 +354,8 @@ int main(int argc, char *argv[])
     if (argc < 2)
     {
         printf("Incorrect program usage\n"
-               "Usage: %s <SerialPort>\n"
-               "Example: %s /dev/ttyS1\n",
+               "Usage: %s <SerialPort> <FileName\n"
+               "Example: %s /dev/ttyS1 pinguim.gif\n",
                argv[0],
                argv[0]);
         exit(1);
@@ -377,8 +377,12 @@ int main(int argc, char *argv[])
     int sizeStartPacket;
 
     sizeStartPacket = LLREAD(fd,startPacket);
-    fileSize = (startPacket[3] << 24) | (startPacket[4] << 16) | (startPacket[5] << 8) | startPacket[6];
-    printf("FILE HAS %i bytes\n",fileSize);
+    if(sizeStartPacket > 0 ){
+        fileSize = (startPacket[3] << 24) | (startPacket[4] << 16) | (startPacket[5] << 8) | startPacket[6];
+        printf("FILE HAS %i bytes\n",fileSize);
+    }
+    
+    
 
     fileBytes = (unsigned char*)malloc(fileSize * sizeof(unsigned char));
     
