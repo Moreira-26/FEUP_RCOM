@@ -40,7 +40,7 @@
 #define CP_LENGTH_FILESIZE (0x04)
 #define Control_DATA_PACKET (0x01)
 #define BUF_SIZE 256
-#define PACKET_SIZE 50000
+#define PACKET_SIZE 200
 
 #define TIMEOUT 3 //Tempo até Timeout
 #define MAX_SENDS 3 //Numero maximo de tentativas de envio
@@ -228,6 +228,13 @@ int LLWRITE(int fd, unsigned char* msg, int size){
             return sizeFrameFinal;
         }else if(controlWordReceived == REJ0 || controlWordReceived == REJ1 ){
             printf("REJ received\n"); 
+            if(controlWordReceived == REJ0 && currentFrame == 1){
+                currentFrame = 0;
+                break;
+            }else if(controlWordReceived == REJ1 && currentFrame == 0){
+                currentFrame = 1;
+                break;
+            }
             alarmCount = 0;
             alarm(0);
         }
@@ -238,7 +245,7 @@ int LLWRITE(int fd, unsigned char* msg, int size){
     free(frameFinal);
 
     if(alarmCount >= MAX_SENDS){
-        printf("time-out\n");
+        printf("time-out max sends exceeded\n");
         exit(-1);
     }
     return -1;
@@ -457,6 +464,7 @@ int main(int argc, char *argv[])
         int packetToSendSize = packetSize + 4; 
 
         LLWRITE(fd,packetToSend,packetToSendSize);
+        printf("Packet sent\n");
         free(packetToSend);
         free(packet);
     }
