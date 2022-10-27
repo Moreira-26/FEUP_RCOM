@@ -342,7 +342,7 @@ unsigned char * removeControlHeader(unsigned char *packetReceived,int sizePacket
 
 void createFile(unsigned char* fileData, int fileSize){
     FILE *fp;
-    fp = fopen("penguinRECEIVER.gif","wb+");
+    fp = fopen("pinguimReceiver.gif","wb+");
     fwrite((void*)fileData,1,fileSize,fp);
     fclose(fp);
 }
@@ -354,8 +354,8 @@ int main(int argc, char *argv[])
     if (argc < 2)
     {
         printf("Incorrect program usage\n"
-               "Usage: %s <SerialPort> <FileName\n"
-               "Example: %s /dev/ttyS1 pinguim.gif\n",
+               "Usage: %s <SerialPort>\n"
+               "Example: %s /dev/ttyS1\n",
                argv[0],
                argv[0]);
         exit(1);
@@ -381,7 +381,6 @@ int main(int argc, char *argv[])
         fileSize = (startPacket[3] << 24) | (startPacket[4] << 16) | (startPacket[5] << 8) | startPacket[6];
         printf("FILE HAS %i bytes\n",fileSize);
     }
-    
     
 
     fileBytes = (unsigned char*)malloc(fileSize * sizeof(unsigned char));

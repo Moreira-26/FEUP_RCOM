@@ -40,7 +40,7 @@
 #define CP_LENGTH_FILESIZE (0x04)
 #define Control_DATA_PACKET (0x01)
 #define BUF_SIZE 256
-#define PACKET_SIZE 500
+#define PACKET_SIZE 50000
 
 #define TIMEOUT 3 //Tempo até Timeout
 #define MAX_SENDS 3 //Numero maximo de tentativas de envio
@@ -55,7 +55,7 @@ int alarmCount = 0;
 int UAreceived = FALSE;
 int currentFrame = 0;
 
-volatile int STOP = FALSE;
+
 
 int sequenceNumberPacket = 0;
 
@@ -224,6 +224,7 @@ int LLWRITE(int fd, unsigned char* msg, int size){
             alarmCount = 0;
             alarmEnabled = FALSE;
             stop = TRUE; 
+            free(frameFinal);
             return sizeFrameFinal;
         }else if(controlWordReceived == REJ0 || controlWordReceived == REJ1 ){
             printf("REJ received\n"); 
@@ -392,21 +393,18 @@ unsigned char* addHeaderPacket(unsigned char* packet, int fileSize, int packetSi
     return packetToSend;
 }
 
-unsigned char* createPacket(unsigned char* fileData,int*indexFile, int fileSize,int* packetSize){
+void createPacket(unsigned char* fileData,int*indexFile, int fileSize,int* packetSize, unsigned char* packet){
     
     if(*indexFile + *packetSize > fileSize){
         *packetSize = fileSize  - *indexFile;
     }
-
-    unsigned char* packet = (unsigned char*)malloc(*packetSize * sizeof(unsigned char));
-
-
+    packet = (unsigned char*)realloc(packet,*packetSize * sizeof(unsigned char));
+    
     for(int i = 0; i < *packetSize;i++){
         packet[i] = fileData[*indexFile];
         (*indexFile)++;
     }
 
-    return packet;
 }
 
 
@@ -418,8 +416,8 @@ int main(int argc, char *argv[])
     if (argc < 3)
     {
         printf("Incorrect program usage\n"
-               "Usage: %s <SerialPort>\n"
-               "Example: %s /dev/ttyS1\n",
+               "Usage: %s <SerialPort> <FileName\n"
+               "Example: %s /dev/ttyS1 pinguim.gif\n",
                argv[0],
                argv[0]);
         exit(1);
@@ -452,18 +450,17 @@ int main(int argc, char *argv[])
     int numPackets = 0;
     int numPackage = 0;
     while(indexFile < fileSize && packetSize == PACKET_SIZE){
-        unsigned char* packet = createPacket(fileBytes,&indexFile,fileSize,&packetSize);
-        
+        unsigned char* packet = (unsigned char*) malloc(1 * sizeof(unsigned char));
+        createPacket(fileBytes,&indexFile,fileSize,&packetSize, packet);
 
         unsigned char* packetToSend = addHeaderPacket(packet,fileSize,packetSize);
         int packetToSendSize = packetSize + 4; 
 
         LLWRITE(fd,packetToSend,packetToSendSize);
-        
-        free(packet);
         free(packetToSend);
+        free(packet);
     }
-
+    free(fileBytes);
     unsigned char * endPacket = createControlPacket(FALSE, fileSize,&sizeControlPacket);
     LLWRITE(fd,endPacket,sizeControlPacket);
     printf("END PACKET SENT\n");
