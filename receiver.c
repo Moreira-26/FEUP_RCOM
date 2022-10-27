@@ -225,11 +225,11 @@ int LLREAD(int fd, unsigned char * messageReceived){
                 }else{
                     //Frame recebido repetido
                     printf("duplicate frame\n");
-                    if(expectedFrame == 0){
-                        sendControlWord(fd,REJ0);
+                    if(receivedFrame == 0){
+                        sendControlWord(fd,REJ1);
                         state = 7;
                     }else{
-                        sendControlWord(fd,REJ1);
+                        sendControlWord(fd,REJ0);
                         state = 7;     
                     }
                     acceptedFrame = FALSE;
@@ -277,7 +277,7 @@ void LLCLOSE(int fd){
 }
 
 
-void LLOPEN(int fd){
+int LLOPEN(int fd){
 
     if (tcgetattr(fd, &oldtio) == -1)
     {
@@ -310,7 +310,10 @@ void LLOPEN(int fd){
         printf("SET RECEIVED\n");
         sendControlWord(fd,UA);
         printf("UA SENT\n");
+        return TRUE;
     }
+    
+    return FALSE;
 
 }
 
@@ -368,7 +371,9 @@ int main(int argc, char *argv[])
         exit(-1);
     }
 
-    LLOPEN(fd);
+    if(!LLOPEN(fd)){
+        exit(-1);
+    };
 
     unsigned char* startPacket = (unsigned char*)malloc(0);
     unsigned char* fileBytes ;
@@ -391,6 +396,7 @@ int main(int argc, char *argv[])
         packetReceived = (unsigned char*)malloc(0);
         sizePacketReceived = LLREAD(fd,packetReceived);
         if(sizePacketReceived > 0){
+            printf("Packet received\n");
             if(isEndPacket(packetReceived,sizePacketReceived,startPacket,sizeStartPacket)){
                 printf("End Packect received\n");
                 break;
