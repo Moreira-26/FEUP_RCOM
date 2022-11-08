@@ -9,6 +9,7 @@ OBJ = sender.o receiver.o
 app: $(OBJ)
 	$(CC) $(CFLAGS) -o $@ $^ 
 
+.PHONY: clean
 
 clean: 
 	rm -f ./*.o
