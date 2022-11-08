@@ -1,16 +1,13 @@
-CC=gcc
-CFLAGS=-Wall
-DEPS = sender.h receiver.h 
-OBJ = sender.o receiver.o
+#This is a makefile
 
-%.o: $(DEPS)
-	$(CC) $(CFLAGS) -o $@ $< 
+all: proj
 
-app: $(OBJ)
-	$(CC) $(CFLAGS) -o $@ $^ 
+proj: receiver.c sender.c
+	gcc -o receiver receiver.c
+	gcc -o sender sender.c
 
-.PHONY: clean
-
-clean: 
-	rm -f ./*.o
-	rm -f ./app
+clean:
+	rm -rf receiver
+	rm -rf sender
+	rm -rf *.exe
+	rm -rf *.o
