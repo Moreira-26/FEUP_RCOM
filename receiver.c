@@ -300,7 +300,7 @@ int isEndPacket(unsigned char* packetReceived,int sizePacketReceived, unsigned c
             }
         }
     }
-    return TRUE; //TODO 
+    return TRUE; 
 }
 
 unsigned char * removeControlHeader(unsigned char *packetReceived,int sizePacketReceived){

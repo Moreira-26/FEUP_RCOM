@@ -11,3 +11,4 @@ clean:
 	rm -rf sender
 	rm -rf *.exe
 	rm -rf *.o
+	rm -rf pinguimReceiver.gif

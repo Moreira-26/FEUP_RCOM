@@ -34,23 +34,35 @@
 #define CP_END (0x03)
 
 
+//--------------------Data link layer--------------------------------
 
+//Função com máquina de estados para leitura de controlWord
 int receiveControlWord(int fd, unsigned char C);
 
+//Função que verifica o BCC2
 int verifyBCC2(unsigned char*messageReceived, int sizeMessageReceived);
 
+//Função que cria uma trama de supervisão e envia
 void sendControlWord(int fd, unsigned char C);
 
+//Função de leitura de tramas
 int LLREAD(int fd, unsigned char * messageReceived);
 
+//Função de terminação da ligação
 void LLCLOSE(int fd);
 
+//Função de estabelecimento da ligação
 int LLOPEN(int fd);
 
+//---------------------Application Layer----------------------------
+
+//Função que verifica se um packet é o packet de terminação
 int isEndPacket(unsigned char* packetReceived,int sizePacketReceived, unsigned char* startPacket, int sizeStartPacket);
 
+//Função que remove o Header de controlo da application layer
 unsigned char * removeControlHeader(unsigned char *packetReceived,int sizePacketReceived);
 
+//Função que cria um ficheiro a partir dos dados recebidos
 void createFile(unsigned char* fileData, int fileSize);
 
 int main(int argc, char *argv[]);

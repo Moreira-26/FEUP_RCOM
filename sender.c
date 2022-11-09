@@ -163,10 +163,14 @@ int LLWRITE(int fd, unsigned char* msg, int size){
     }
     
     frameFinal[k + 1] = FLAG;  
+    unsigned char* frameError;
     //enviar FrameFinal
     int stop = FALSE;
     do {
-        write(fd,frameFinal,sizeFrameFinal);
+
+        frameError = errorBCC1(frameFinal,sizeFrameFinal);//Altera BCC1 caso percentagem de erro > 0
+        frameError = errorBCC2(frameFinal,sizeFrameFinal);//Altera BCC2 caso percentagem de erro > 0
+        write(fd,frameError,sizeFrameFinal);
         
         //iniciar Alarm
         alarm(TIMEOUT);
@@ -180,7 +184,7 @@ int LLWRITE(int fd, unsigned char* msg, int size){
             alarmCount = 0;
             alarmEnabled = FALSE;
             stop = TRUE; 
-            free(frameFinal);
+            free(frameError);
             return sizeFrameFinal;
         }else if(controlWordReceived == REJ0 || controlWordReceived == REJ1 ){
             printf("REJ received\n"); 
@@ -196,9 +200,9 @@ int LLWRITE(int fd, unsigned char* msg, int size){
         }
         controlWordReceived = 0xFF;
             
-    }while(!stop && alarmCount < MAX_SENDS); //Para quando numero de tentativas maximo ou recebeu um RR correto 
+    }while(!stop && alarmCount < MAX_SENDS); 
     
-    free(frameFinal);
+    free(frameError);
 
     if(alarmCount >= MAX_SENDS){
         printf("time-out max sends exceeded\n");
@@ -397,11 +401,16 @@ int main(int argc, char *argv[])
     int fileSize;
     unsigned char* fileBytes = openFile((unsigned char*)argv[2], &fileSize);
 
+    struct timespec startTime, endTime;
+    clock_gettime(CLOCK_REALTIME, &startTime);
+
+
     if(!LLOPEN(fd)){
         printf("time-out LLOPEN\n");
         exit(-1);
     }
 
+    srand(time(NULL));
     int sizeControlPacket;
     
     unsigned char * startPacket = createControlPacket(TRUE, fileSize,&sizeControlPacket);
@@ -432,8 +441,39 @@ int main(int argc, char *argv[])
 
     LLCLOSE(fd);
 
+    clock_gettime(CLOCK_REALTIME, &endTime);
+
+    double elapsed = (endTime.tv_sec - startTime.tv_sec) + (endTime.tv_nsec - startTime.tv_nsec) / 1E9;
+
+    //printf("Tempo:%f\n",elapsed);
 
     return 0;
+}
+
+unsigned char *errorBCC1(unsigned char* packet, int packetSize){
+    unsigned char* packetError = (unsigned char*)malloc(packetSize *sizeof(unsigned char));
+    memcpy(packetError,packet,packetSize);
+    int prob = (rand() % 100) + 1;
+    if(prob <= BCC1ERROR){
+        int i = (rand() % 2);
+        unsigned char randomLetter = (unsigned char)('A' + (rand() % 26));
+        packetError[i] = randomLetter;
+        printf("Error in BCC1\n");
+    }
+    return packetError;
+}
+
+unsigned char *errorBCC2(unsigned char* packet, int packetSize){
+    unsigned char* packetError = (unsigned char*)malloc(packetSize *sizeof(unsigned char));
+    memcpy(packetError,packet,packetSize);
+    int prob = (rand() % 100) + 1;
+    if(prob <= BCC2ERROR){
+        int i = (rand() % (packetSize - 5)) + 4;
+        unsigned char randomLetter = (unsigned char)('A' + (rand() % 26));
+        packetError[i] = randomLetter;
+        printf("Error in BCC2\n");
+    }
+    return packetError;
 }
 
 
