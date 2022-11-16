@@ -1,0 +1,41 @@
+parse 
+
+download ftp://<user>:<password>@<host>/<url>
+
+download user password host url
+
+
+parse do argumento 
+verificar o ftp
+
+struct info {
+	user
+	password
+	host
+	ip
+	url
+}
+
+
+
+Codes:
+100-159 -> Informational message wait for other replie
+200-259 -> Success
+300-359 -> More information needed
+400-459 -> Denied send again
+500-559 -> Denied permanent error 
+
+227 Entering Passive Mode (193,137,29,15,230,22).
+
+strtok(buf, "(");
+char*ip1 = strtok(NULL, ",");
+char*ip2 = strtok(NULL, ",");
+char*ip3 = strtok(NULL, ",");
+char*ip4 = strtok(NULL, ",");
+char*p1 = strtok(NULL, ",");
+char*p2 = strtok(NULL, ")");
+
+
+
+
+
