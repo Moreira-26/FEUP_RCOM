@@ -10,6 +10,7 @@
 
 
 
+
 typedef struct data
 {
     char user[128];
@@ -18,7 +19,7 @@ typedef struct data
     char path[240];
     char fileName[128];
     char ip[128];   
-};
+}data;
 
 int getIp(char *host, struct data *data){
     struct hostent *h;
@@ -99,30 +100,37 @@ int sendCommand(int sockfd, char * command){
         printf("error sending command\n");
         return 1;
     }
-    printf("command sent\n");
+    printf("%s\n",command);
     return 0;
 }
 
 int readReply(FILE * readSockect){
-    char * buf;
     long code;
-    size_t bytesRead;
+    char * aux;
+    
+    char *buf;
+    size_t bufsize = 256;
+    size_t characters;
 
 
     while(1){
-        getline(&buf, &bytesRead, readSockect);
+        buf = (char *)malloc(bufsize * sizeof(char));
+        characters = getline(&buf,&bufsize,readSockect);
         printf("> %s", buf);
-
-        if(buf[3] == ' '){
-            code = strtol(buf, &buf, 10); 
-            if(code > 500 && code < 559){
+        
+        if((characters > 0) && (buf[3] == ' ')){
+            code = strtol(buf, &aux, 10); 
+            
+            if(code >= 500 && code <= 559){
                 printf("Error\n");
                 exit(1);
             }
-            printf("Code: %li\n", code);
+            //printf("Code: %li\n", code);
             break;
         }
-    }
+        free(buf);
+    }  
+
     return 0;
 }
 
@@ -165,17 +173,19 @@ int main(int argc, char **argv) {
     }
 
     FILE * readSockect = fdopen(sockfd, "r");
+    
     readReply(readSockect);
     
     //credentials
     char command[256];
     sprintf(command, "user %s\n",dataInfo.user);
     sendCommand(sockfd,command);
+    //sleep(1);
     readReply(readSockect);
     sprintf(command, "pass %s\n",dataInfo.password);
     sendCommand(sockfd,command);
     readReply(readSockect);
-
+    
     //set mode
     sprintf(command, "pasv \n");
     sendCommand(sockfd,command);
@@ -202,9 +212,7 @@ int main(int argc, char **argv) {
     //close
     sprintf(command, "quit \r\n");
     sendCommand(sockfd,command);
-
+    
     return 0;
 
 }
-
-
