@@ -36,6 +36,59 @@ int getIp(char *host, struct data *data){
     return 0;
 }
 
+int getFileName(struct data * data){
+  char fullpath[256];
+  strcpy(fullpath, data->path);
+  char* token = strtok(fullpath, "/");
+  while( token != NULL ) {
+    strcpy(data->fileName, token);
+    token = strtok(NULL, "/");
+  }
+  return 0;
+}
+
+int parseData(char *url, struct data *data ){
+    char* ftp = strtok(url, "/");       // ftp:
+    char* urlrest = strtok(NULL, "/");  // [<user>:<password>@]<host>
+    char* path = strtok(NULL, "");      // <url-path>
+
+    if (strcmp(ftp, "ftp:") != 0){
+        printf("Error: Not using ftp\n");
+        return 1;
+    }
+
+    char* user = strtok(urlrest, ":");
+    char* pass = strtok(NULL, "@");
+
+
+    // no user:password given
+    if (pass == NULL)
+    {
+        user = "anonymous";
+        pass = "pass";
+        strcpy(data->host, urlrest);
+    } else
+        strcpy(data->host, strtok(NULL, ""));
+
+
+    strcpy(data->path, path);
+    strcpy(data->user, user);
+    strcpy(data->password, pass);
+
+
+    if(getIp(data->host,data) != 0){
+        printf("Error resolving host name\n");
+        return 1;
+    }
+
+    if(getFileName(data) != 0){
+        perror("reading filename\n");
+        exit(1);
+    }
+
+    return 0;
+}
+
 int startConnection(char *ip, int port, int *sockfd){
     struct sockaddr_in server_addr;
 
@@ -153,20 +206,22 @@ int readToFile(char *fileName, int sockfdReceive ){
 
 int main(int argc, char **argv) {
 
+    if(argc != 2){
+          printf("Incorrect program usage\n"
+               "Usage: download ftp://<user>:<password>@<host>/<url> \n"
+               "Example anonymous user: download ftp://ftp.up.pt/pub/kodi/timestamp.txt \n"
+               "Example other user: download ftp://userName:password@ftp.up.pt/pub/kodi/timestamp.txt \n");
+        exit(1);
+    }
+
     struct data dataInfo;
     int sockfd, sockfdReceive;
 
-    strcpy(dataInfo.user ,"anonymous");
-    strcpy(dataInfo.password ,"1234");
-    strcpy(dataInfo.host,"ftp.up.pt");
-    strcpy(dataInfo.path,"pub/kodi/timestamp.txt");
-    strcpy(dataInfo.fileName,"timestamp.txt");
-
-    if(getIp(dataInfo.host,&dataInfo) != 0){
-        printf("Error resolving host name\n");
+    if(parseData(argv[1], &dataInfo) != 0){
+        printf("Error parsing input\n");
         return 1;
     }
-
+    
     if(startConnection(dataInfo.ip, 21, &sockfd) != 0){
         printf("Error starting connection\n");
         return 1;
